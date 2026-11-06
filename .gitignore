@@ -1,0 +1,48 @@
+# 必须忽略：登录态、密钥、运行时数据
+
+# 配置（含 API Key / token）
+config.json
+standalone/config.json
+standalone/selectors.local.json
+**/config.local.json
+.env
+.env.*
+
+# 浏览器持久化 profile（cookie / localStorage 全在这里）
+standalone/state/
+standalone/state/**
+state/
+
+# 运行时日志、审计、待审队列、去重账本、DOM 快照
+*.log
+audit.jsonl
+approval.jsonl
+seen.json
+video-cache.json
+dom-dump-*.html
+dom-dump-*.txt
+
+# Node
+node_modules/
+npm-debug.log*
+.npm/
+package-lock.json
+
+# 抽帧 / 音频临时产物
+standalone/tmp/
+tmp/
+*.frames/
+*.wav
+*.mp3
+*.m4a
+
+# 打包产物
+dist/
+*.zip
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store

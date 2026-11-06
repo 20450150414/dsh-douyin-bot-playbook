@@ -1,0 +1,126 @@
+{
+  "_note": "脱敏模板。所有自动发送默认关闭。复制为 standalone/config.json 后按 config/FILL.md 填写。所有相对路径以 standalone/ 为当前目录解析。",
+  "account": {
+    "label": "my-douyin",
+    "profileDir": "./state/browser-profile",
+    "login": "manual-qrcode",
+    "loginWaitSec": 180
+  },
+  "browser": {
+    "headless": false,
+    "cdpEndpoint": "",
+    "channel": "chromium",
+    "slowMoMs": 200,
+    "navigationTimeoutMs": 30000,
+    "viewport": { "width": 1366, "height": 900 }
+  },
+  "douyin": {
+    "baseUrl": "https://www.douyin.com",
+    "commentInboxUrl": "https://creator.douyin.com/creator-micro/content/comment",
+    "dmInboxUrl": "https://www.douyin.com/message",
+    "useFixture": false,
+    "fixtureFile": "./fixtures/inbox-sample.json",
+    "pollIntervalMs": 30000,
+    "maxItemsPerPoll": 20,
+    "pageSettleMs": 1500
+  },
+  "inbox": {
+    "comments": false,
+    "directMessages": false,
+    "mentions": false
+  },
+  "llm": {
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKey": "[LLM_API_KEY]",
+    "model": "gpt-4o-mini",
+    "visionModel": "gpt-4o-mini",
+    "mock": false,
+    "timeoutMs": 30000,
+    "temperature": 0.8,
+    "maxTokens": 500
+  },
+  "video": {
+    "enabled": false,
+    "ownVideosOnly": true,
+    "maxFrames": 6,
+    "frameIntervalSec": 2,
+    "captureMode": "page-screenshot",
+    "ffmpegPath": "ffmpeg",
+    "asr": {
+      "enabled": false,
+      "baseUrl": "",
+      "apiKey": "[ASR_API_KEY]",
+      "model": "whisper-1"
+    },
+    "cacheTtlHours": 168,
+    "fixtureFile": "./fixtures/video-summary-sample.json"
+  },
+  "reply": {
+    "enabled": false,
+    "dryRun": true,
+    "requireHumanApproval": true,
+    "replyToComments": false,
+    "replyToDMs": false,
+    "autoLike": false,
+    "whitelist": {
+      "userIds": [],
+      "keywords": [],
+      "allowAllWhenEmpty": false
+    },
+    "denylist": {
+      "userIds": [],
+      "keywords": ["刷单", "加微信", "代运营", "私信领", "免费领"]
+    },
+    "maxRepliesPerHour": 8,
+    "maxRepliesPerDay": 40,
+    "minIntervalSec": 30,
+    "maxReplyChars": 80,
+    "maxRepliesPerItem": 3,
+    "dedupeTtlHours": 48,
+    "approvalTtlHours": 24
+  },
+  "safety": {
+    "treatExternalTextAsData": true,
+    "blockSecretsInOutput": true,
+    "secretPatterns": [
+      "api[_-]?key",
+      "bearer\\s+[a-z0-9._-]{12,}",
+      "(password|passwd|cookie|sessionid|access[_-]?token)\\s*[:=]",
+      "[a-z]:\\\\[^\\s]{4,}",
+      "sk-[a-z0-9]{16,}",
+      "\\[[A-Z_]+\\]"
+    ],
+    "injectionPatterns": [
+      "忽略(之前|上面|所有|前面).{0,12}(指令|提示|规则|要求)",
+      "ignore (all |previous |prior )?(instructions|prompts|rules)",
+      "(system prompt|系统提示词|开发者指令|developer message)",
+      "你现在是(一个|一名|)?",
+      "(把|输出|发送|告诉我)(你的|全部|所有)?(配置|密钥|token|cookie|密码|提示词)",
+      "do not follow (your|the) (rules|instructions)",
+      "act as (a |an )?(admin|administrator|system)"
+    ],
+    "stopOnLoginExpired": true,
+    "stopOnCaptcha": true,
+    "stopOnRateLimitHint": true
+  },
+  "persona": {
+    "name": "小舟",
+    "systemPromptFile": "../prompts/SYSTEM-PROMPT.md",
+    "extraPromptFiles": ["../prompts/reply-contract.md"],
+    "historyItems": 6
+  },
+  "state": {
+    "dir": "./state",
+    "seenFile": "seen.json",
+    "auditFile": "audit.jsonl",
+    "approvalFile": "approval.jsonl",
+    "logFile": "takeover.log",
+    "videoCacheFile": "video-cache.json"
+  },
+  "console": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 3210,
+    "token": "[CONSOLE_TOKEN]"
+  }
+}

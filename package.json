@@ -1,0 +1,26 @@
+{
+  "name": "dsh-douyin-bot-playbook",
+  "version": "0.1.0",
+  "private": true,
+  "description": "接管抖音的实践笔记 + 可运行的独立接管脚本（默认全关、dry-run、人工放行）",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "demo": "node standalone/takeover.mjs --fixture --dry --once",
+    "verify": "node standalone/tools/verify.mjs",
+    "dry": "node standalone/takeover.mjs --dry --once",
+    "pending": "node standalone/takeover.mjs --pending",
+    "start": "node standalone/takeover.mjs"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/20450150414/dsh-douyin-bot-playbook.git"
+  },
+  "keywords": [
+    "douyin", "playbook", "agent", "playwright", "human-in-the-loop",
+    "prompt-injection", "audit", "deepseek-harness"
+  ]
+}

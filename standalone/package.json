@@ -1,0 +1,27 @@
+{
+  "name": "dsh-douyin-takeover",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "抖音接管独立脚本：只读轮询 → 视频理解 → 模型草稿 → 放行判定 → 回发 → 审计。默认全关、dry-run、人工放行。",
+  "license": "MIT",
+  "bin": {
+    "douyin-takeover": "./takeover.mjs"
+  },
+  "scripts": {
+    "demo": "node takeover.mjs --fixture --dry --once",
+    "verify": "node tools/verify.mjs",
+    "dry": "node takeover.mjs --dry --once",
+    "watch": "node takeover.mjs --dry",
+    "pending": "node takeover.mjs --pending",
+    "start": "node takeover.mjs",
+    "capture": "node tools/capture-selectors.mjs"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {},
+  "optionalDependencies": {
+    "playwright": ">=1.40.0"
+  }
+}
