@@ -52,11 +52,20 @@ async function actuallySend(cfg, paths, item, texts, audit, { approvedBy = 'auto
   let sent = 0;
   for (const [i, t] of texts.entries()) {
     try {
-      await sendOne(cfg, paths, item, t);
+      if (cfg.douyin?.backend === 'mcp') {
+        const { getMcp } = await import('./mcp-client.mjs');
+        const { sendItem } = await import('./mcp-backend.mjs');
+        const res = await sendItem(cfg, getMcp(cfg), item, t);
+        if (!res?.ok) throw new Error(String(res?.error ?? res?.hint ?? 'mcp 发送失败'));
+        if (res.verified === false) log('warn', '上游回执未确认（pending/unknown），不重发', { itemId: item.id, status: res.status });
+      } else {
+        await sendOne(cfg, paths, item, t);
+      }
       sent += 1;
       audit.write('sent', {
         channel: item.channel, itemId: item.id, userId: item.userId,
         text: t, decision: approvedBy, messageCount: texts.length, index: i,
+        backend: cfg.douyin?.backend === 'mcp' ? 'mcp' : 'dom',
       });
       log('info', '已发送', { channel: item.channel, itemId: item.id, text: redact(t) });
       if (i < texts.length - 1) await sleep(1200 + (i % 2) * 800);

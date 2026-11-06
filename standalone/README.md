@@ -45,6 +45,41 @@ cat state/audit.jsonl                      # macOS/Linux
 
 > 离线演示刻意旁路了「开关 / 渠道 / 白名单」三闸（否则空白名单会把样例全拦掉），日志里会明确打 `[fixture] 离线演示已旁路…`。**黑名单、注入检测、密钥拦截、长度、频率闸、人工放行一个都没旁路**，真机模式一律 fail-closed。
 
+## 两种「读/写」后端
+
+| 后端 | 怎么切 | 靠什么 | 装什么 |
+|---|---|---|---|
+| `dom` | 默认 | 自己解析页面 DOM + `src/selectors.mjs` | Node + Playwright |
+| `mcp` | `--mcp` 或 `douyin.backend="mcp"` | `vendor/douyin-mcp`（从页面自身 XHR 取数，带提交回执） | Python venv + MCP 依赖 |
+
+真接账号走 `mcp` 这条路，别自己跟哈希类名硬碰：
+
+```powershell
+cd standalone
+powershell -ExecutionPolicy Bypass -File tools\setup-mcp.ps1   # 建 venv + 装 mcp<2 / playwright
+node takeover.mjs --selfcheck                                  # 工具清单 + 登录态 + 上游自检
+node takeover.mjs --login                                      # 出二维码 → 手机抖音扫 → 轮询登录结果
+node takeover.mjs --mcp --dry --once                           # 读真评论/真私信 + 真看视频，只出草稿不发送
+```
+
+`--mcp` 只放开「读」和「理解」，**不碰任何发送开关**。发送要三道刹车同时开：
+
+```
+① config.reply.enabled=true 且 dryRun=false
+② 本仓库据此给子进程传 DOUYIN_ALLOW_WRITES=1（mcp.allowWrites=false 可单独掐断这一步）
+③ 上游在该变量为 1 时才把 douyin_comment / douyin_chat_send 注册成工具
+```
+
+默认状态下不是「选择不发」，而是那个 Python 进程里**没有发消息这个工具**——被诱导的模型调不到不存在的东西。能力层的来源、署名与边界见 `../vendor/douyin-mcp/NOTICE.md`。
+
+## 离线回归（不碰账号也能验 --mcp 链路）
+
+```bash
+node tests/mcp-smoke.mjs
+```
+
+用 `tests/mock-mcp-server.mjs` 假装能力层（返回形状对齐上游），跑 23 项断言：归一化、四道闸、去重 + `exclude_cids`、未登录停机、人工放行受 dry-run 约束。改 `policy` / `actions` 后先跑这个，再碰真账号。
+
 ## 一键启动 / 停止（Windows）
 
 `tools/start.ps1` 与 `tools/stop.ps1` 是幂等的常驻启动器：后台隐藏运行、自动找 `node.exe`、写 `state/daemon.pid`、把 stdout/stderr 重定向到 `state/daemon.*.log`，重复执行不会起第二个进程抢端口。

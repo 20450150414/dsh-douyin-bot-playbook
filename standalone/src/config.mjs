@@ -7,6 +7,7 @@
  * 优先级：CLI 覆盖 > 环境变量 > standalone/config.json > config/config.example.json。
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,7 +66,9 @@ export function loadConfig(cli = {}) {
   const ensure = (g, fallback = {}) => {
     if (!cfg[g] || typeof cfg[g] !== 'object') cfg[g] = fallback;
   };
-  for (const g of ['account', 'browser', 'douyin', 'inbox', 'llm', 'video', 'reply', 'safety', 'persona', 'state', 'console']) ensure(g);
+  for (const g of ['account', 'browser', 'douyin', 'inbox', 'llm', 'video', 'reply', 'safety', 'persona', 'state', 'console', 'mcp']) ensure(g);
+  if (!cfg.douyin.backend) cfg.douyin.backend = 'dom';
+  if (!cfg.llm.mock && cfg.llm.apiKey === undefined) cfg.llm.apiKey = '';
   if (!cfg.video.asr) cfg.video.asr = { enabled: false };
   if (!cfg.reply.whitelist) cfg.reply.whitelist = { userIds: [], keywords: [], allowAllWhenEmpty: false };
   if (!cfg.reply.denylist) cfg.reply.denylist = { userIds: [], keywords: [] };
@@ -73,6 +76,25 @@ export function loadConfig(cli = {}) {
   if (!Array.isArray(cfg.persona.extraPromptFiles)) cfg.persona.extraPromptFiles = [];
   if (!Array.isArray(cfg.safety.secretPatterns)) cfg.safety.secretPatterns = [];
   if (!Array.isArray(cfg.safety.injectionPatterns)) cfg.safety.injectionPatterns = [];
+
+  // ---- 能力层（MCP）默认值：指向仓库内 vendor/douyin-mcp，自动挑 venv 里的 python ----
+  const mcpScript = resolveFromBase('../vendor/douyin-mcp/mcp_server.py');
+  const venvPy = process.platform === 'win32'
+    ? resolveFromBase('../vendor/douyin-mcp/.venv/Scripts/python.exe')
+    : resolveFromBase('../vendor/douyin-mcp/.venv/bin/python');
+  if (cfg.mcp.script === undefined) cfg.mcp.script = mcpScript;
+  if (!cfg.mcp.command) {
+    cfg.mcp.command = process.env.DOUYIN_MCP_PYTHON
+      || (fs.existsSync(venvPy) ? venvPy : (process.platform === 'win32' ? 'python' : 'python3'));
+  }
+  if (!Array.isArray(cfg.mcp.args) || !cfg.mcp.args.length) cfg.mcp.args = [cfg.mcp.script];
+  // 'node' 在 Windows 上未必在 PATH 里，统一换成当前解释器的绝对路径
+  if (/^node(\.exe)?$/i.test(String(cfg.mcp.command))) cfg.mcp.command = process.execPath;
+  if (cfg.mcp.home === undefined) {
+    cfg.mcp.home = path.join(os.homedir(), '.dsh', 'douyin-duty');
+  }
+  if (!cfg.mcp.env || typeof cfg.mcp.env !== 'object') cfg.mcp.env = {};
+  cfg.mcp.env = { DSH_DOUYIN_HOME: cfg.mcp.home, ...cfg.mcp.env };
 
   // 环境变量覆盖（只在变量存在时生效，文件里保留占位符也可以跑）
   if (process.env.DOUYIN_LLM_API_KEY) applyOverride(cfg, 'llm', 'apiKey', process.env.DOUYIN_LLM_API_KEY);
@@ -93,6 +115,20 @@ export function loadConfig(cli = {}) {
     applyOverride(cfg, 'inbox', 'comments', true);
     applyOverride(cfg, 'inbox', 'directMessages', true);
     applyOverride(cfg, 'inbox', 'mentions', true);
+  }
+  // --mcp：切到真实能力层。只放开「读」和「理解」，不碰任何发送开关。
+  if (cli.mcp) {
+    applyOverride(cfg, 'douyin', 'backend', 'mcp');
+    applyOverride(cfg, 'douyin', 'useFixture', false);
+    applyOverride(cfg, 'llm', 'mock', false);
+    applyOverride(cfg, 'inbox', 'comments', true);
+    applyOverride(cfg, 'inbox', 'directMessages', true);
+    applyOverride(cfg, 'video', 'enabled', true);
+    if (cli.loginOnly) {
+      applyOverride(cfg, 'inbox', 'comments', false);
+      applyOverride(cfg, 'inbox', 'directMessages', false);
+      applyOverride(cfg, 'video', 'enabled', false);
+    }
   }
   if (cli.dry) {
     applyOverride(cfg, 'reply', 'dryRun', true);
@@ -119,6 +155,8 @@ export function loadConfig(cli = {}) {
     approval: joinState(cfg.state.approvalFile || 'approval.jsonl'),
     log: joinState(cfg.state.logFile || 'takeover.log'),
     videoCache: joinState(cfg.state.videoCacheFile || 'video-cache.json'),
+    mcpScript: cfg.mcp.script ? resolveFromBase(cfg.mcp.script) : null,
+    mcpHome: cfg.mcp.home ? path.resolve(cfg.mcp.home) : null,
     fixtureInbox: resolveFromBase(cfg.douyin.fixtureFile || './fixtures/inbox-sample.json'),
     fixtureVideo: resolveFromBase(cfg.video.fixtureFile || './fixtures/video-summary-sample.json'),
     systemPrompt: resolveFromBase(cfg.persona.systemPromptFile || '../prompts/SYSTEM-PROMPT.md'),

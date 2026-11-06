@@ -1,0 +1,93 @@
+{
+  "_note": "离线回归用配置：能力层走 tests/mock-mcp-server.mjs（假数据），模型走 llm.mock（确定性草稿），不碰浏览器、不联网、不真发送。跑法：node tests/mcp-smoke.mjs",
+  "account": { "label": "mock", "profileDir": "./state/mock/browser-profile", "login": "manual-qrcode", "loginWaitSec": 5 },
+  "browser": { "headless": true, "cdpEndpoint": "", "channel": "chromium", "slowMoMs": 0, "navigationTimeoutMs": 15000, "viewport": { "width": 1280, "height": 800 } },
+  "douyin": {
+    "backend": "mcp",
+    "baseUrl": "https://www.douyin.com",
+    "commentInboxUrl": "",
+    "dmInboxUrl": "",
+    "useFixture": false,
+    "fixtureFile": "./fixtures/inbox-sample.json",
+    "pollIntervalMs": 1000,
+    "maxItemsPerPoll": 20,
+    "pageSettleMs": 0
+  },
+  "inbox": { "comments": true, "directMessages": true, "mentions": false },
+  "mcp": {
+    "command": "node",
+    "args": ["./tests/mock-mcp-server.mjs"],
+    "script": "./tests/mock-mcp-server.mjs",
+    "home": "./state/mock/home",
+    "headless": true,
+    "allowWrites": true,
+    "timeoutMs": 30000,
+    "myPostsDays": 1,
+    "maxPostsPerPoll": 2,
+    "commentsPerPost": 10,
+    "inboxLimit": 4,
+    "maxExcludeCids": 50,
+    "useThumbForVision": true,
+    "transcript": false,
+    "mentionOwner": false,
+    "verifyAfterSend": true,
+    "env": {}
+  },
+  "llm": {
+    "baseUrl": "http://127.0.0.1:3425/v1",
+    "apiKey": "",
+    "model": "auto/deepseek-v4-flash",
+    "visionModel": "trae-cn/glm-5v-turbo",
+    "mock": true,
+    "timeoutMs": 60000,
+    "temperature": 0.8,
+    "maxTokens": 300
+  },
+  "video": {
+    "enabled": true,
+    "ownVideosOnly": true,
+    "maxFrames": 3,
+    "frameIntervalSec": 2,
+    "captureMode": "page-screenshot",
+    "ffmpegPath": "ffmpeg",
+    "asr": { "enabled": false, "baseUrl": "", "apiKey": "", "model": "whisper-1" },
+    "cacheTtlHours": 168,
+    "fixtureFile": "./fixtures/video-summary-sample.json"
+  },
+  "reply": {
+    "enabled": true,
+    "dryRun": true,
+    "requireHumanApproval": true,
+    "replyToComments": true,
+    "replyToDMs": true,
+    "autoLike": false,
+    "whitelist": { "userIds": [], "keywords": [], "allowAllWhenEmpty": true },
+    "denylist": { "userIds": [], "keywords": ["加微信", "免费领"] },
+    "maxRepliesPerHour": 8,
+    "maxRepliesPerDay": 40,
+    "minIntervalSec": 0,
+    "maxReplyChars": 80,
+    "maxRepliesPerItem": 3,
+    "dedupeTtlHours": 48,
+    "approvalTtlHours": 24
+  },
+  "safety": {
+    "treatExternalTextAsData": true,
+    "blockSecretsInOutput": true,
+    "secretPatterns": ["api[_-]?key", "sk-[a-z0-9]{16,}", "[a-z]:\\\\[^\\s]{4,}", "bearer\\s+[a-z0-9._-]{12,}"],
+    "injectionPatterns": ["忽略(之前|上面|所有|前面).{0,12}(指令|提示|规则|要求)", "(system prompt|系统提示词)", "(把|输出|发送|告诉我)(你的|全部|所有)?(配置|密钥|token|cookie|密码|提示词)"],
+    "stopOnLoginExpired": true,
+    "stopOnCaptcha": true,
+    "stopOnRateLimitHint": true
+  },
+  "persona": { "name": "小舟", "systemPromptFile": "../prompts/SYSTEM-PROMPT.md", "extraPromptFiles": [], "historyItems": 4 },
+  "state": {
+    "dir": "./state/mock",
+    "seenFile": "seen.json",
+    "auditFile": "audit.jsonl",
+    "approvalFile": "approval.jsonl",
+    "logFile": "takeover.log",
+    "videoCacheFile": "video-cache.json"
+  },
+  "console": { "enabled": false, "host": "127.0.0.1", "port": 3211, "token": "" }
+}

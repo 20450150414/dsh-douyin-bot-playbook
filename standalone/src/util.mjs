@@ -113,6 +113,13 @@ export function splitReplies(raw, { maxChars = 80, maxItems = 3 } = {}) {
   return { silent: texts.length === 0, texts, raw: text, truncated: clean.length > maxItems };
 }
 
+/** 只有真实密钥才发 authorization 头；空值或 [XXX] 占位符一律省略（本地网关不需要） */
+export function authHeaders(apiKey) {
+  const k = String(apiKey ?? '').trim();
+  if (!k || /^\[[A-Z_]+\]$/.test(k)) return {};
+  return { authorization: `Bearer ${k}` };
+}
+
 /** 日志：同时写控制台与 state/takeover.log */
 let logFile = null;
 export function setLogFile(file) {

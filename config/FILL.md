@@ -87,7 +87,47 @@
 
 三条路线（只看元数据 / 抽帧看画面 / 抽帧 + ASR）的成本与取舍见 `playbook/03-video-understanding.md`。
 
-## 6. 人设与输出
+## 6.5 能力层（`douyin.backend` 与 `mcp.*`）
+
+抖音 Web 没有面向个人账号的消息 API，所以「读/写」有两种实现，二选一：
+
+| `douyin.backend` | 靠什么 | 需要装什么 | 适合 |
+|---|---|---|---|
+| `"dom"`（默认） | 自己解析页面 DOM + `src/selectors.mjs` | 只要 Node + Playwright | 零外部依赖的下限、改版时的退路 |
+| `"mcp"` | `vendor/douyin-mcp` 能力层（从页面自身 XHR 取数，有回执） | Python venv + MCP 依赖 | **真接账号的正路** |
+
+用 `--mcp` 这个 CLI 开关切换最省事，它会顺手把「读评论 / 读私信 / 视频理解」打开，**不碰任何发送开关**。
+
+| 字段 | 说明 |
+|---|---|
+| `mcp.command` / `mcp.args` | 留空则自动用 `vendor/douyin-mcp/.venv` 的 python + `mcp_server.py`。装法：`powershell -File tools\setup-mcp.ps1` |
+| `mcp.home` | 上游家目录（登录态浏览器 profile、二维码、缓存）。默认 `~/.dsh/douyin-duty` |
+| `mcp.headless` | `true` 后台跑；扫码那次建议临时设 `false` 看得见窗口 |
+| `mcp.allowWrites` | **第三道刹车**。`false` 时即使 `reply.enabled=true` 也不给子进程传 `DOUYIN_ALLOW_WRITES=1`，上游连写类工具都不注册 |
+| `mcp.myPostsDays` / `maxPostsPerPoll` / `commentsPerPost` | 每轮看几天内的本人作品、几条作品、每条取几条评论。控制成本与风控面 |
+| `mcp.inboxLimit` | 每轮最多翻几个会话（上游逐个打开，很慢，别调太大） |
+| `mcp.maxExcludeCids` | 把已处理过的 cid 传给上游直接过滤，省 token 也防重复 |
+| `mcp.useThumbForVision` | 用 `douyin_thumb` 的封面喂视觉模型（默认开） |
+| `mcp.transcript` / `transcriptSeconds` | 口播转写，需要 `setup-mcp.ps1 -WithAsr` 装 faster-whisper |
+| `mcp.mentionOwner` | 回复时走真人 @ 面板。**默认关**：@ 会额外通知对方，动作更大 |
+| `mcp.verifyAfterSend` | 发完用 `douyin_check_reply` 复核一次 |
+
+### 三道刹车必须同时开
+
+```
+① config.reply.enabled=true 且 dryRun=false
+② 本仓库才会给子进程传 DOUYIN_ALLOW_WRITES=1
+③ 上游在该变量为 1 时才注册写类工具
+另：mcp.allowWrites=false 直接掐断 ②
+```
+
+默认状态下不是「选择不发」，而是那个 Python 进程里**没有发消息这个工具**。
+
+### 模型后端
+
+`llm.baseUrl` 填任一 OpenAI 兼容端点即可。本机若有 Magpie 类网关（常见 `http://127.0.0.1:3425/v1`），`llm.apiKey` 留空，此时本仓库**不会发送 `authorization` 头**。文本模型和视觉模型要分开验：视觉模型必须能真读出图里的字，接口 200 不算通过。
+
+## 7. 人设与输出
 
 | 字段 | 说明 |
 |---|---|

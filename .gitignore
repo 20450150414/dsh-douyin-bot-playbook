@@ -28,6 +28,12 @@ npm-debug.log*
 .npm/
 package-lock.json
 
+# Python 能力层（vendor 脚本本身进仓库，环境与缓存不进）
+vendor/douyin-mcp/.venv/
+vendor/**/__pycache__/
+vendor/**/*.pyc
+.venv/
+
 # 抽帧 / 音频临时产物
 standalone/tmp/
 tmp/

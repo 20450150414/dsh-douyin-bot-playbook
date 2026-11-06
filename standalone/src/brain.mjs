@@ -8,7 +8,7 @@
  * 输出契约见 prompts/reply-contract.md：纯文本多行 / `[SILENT]`，脚本负责分条。
  */
 import fs from 'node:fs';
-import { log, splitReplies, truncate } from './util.mjs';
+import { log, splitReplies, truncate, authHeaders } from './util.mjs';
 
 const FALLBACK_SYSTEM_PROMPT = `# 抖音接管回复 · 通用系统提示词（内置兜底）
 
@@ -135,7 +135,7 @@ async function callLLM(cfg, system, user) {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${cfg.llm.apiKey}`,
+      ...authHeaders(cfg.llm.apiKey),
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(Number(cfg.llm.timeoutMs) || 30000),

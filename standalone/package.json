@@ -11,8 +11,14 @@
   "scripts": {
     "demo": "node takeover.mjs --fixture --dry --once",
     "verify": "node tools/verify.mjs",
+    "test": "node tests/mcp-smoke.mjs",
+    "setup:mcp": "powershell -ExecutionPolicy Bypass -File tools/setup-mcp.ps1",
+    "selfcheck": "node takeover.mjs --selfcheck",
+    "login": "node takeover.mjs --login",
     "dry": "node takeover.mjs --dry --once",
+    "dry:mcp": "node takeover.mjs --mcp --dry --once",
     "watch": "node takeover.mjs --dry",
+    "watch:mcp": "node takeover.mjs --mcp --dry",
     "pending": "node takeover.mjs --pending",
     "start": "node takeover.mjs",
     "capture": "node tools/capture-selectors.mjs"

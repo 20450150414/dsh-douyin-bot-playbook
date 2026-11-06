@@ -15,7 +15,7 @@
  */
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
-import { log, nowIso, sleep } from './util.mjs';
+import { log, nowIso, sleep, authHeaders } from './util.mjs';
 import { getPage, openUrl } from './browser.mjs';
 
 const VISION_PROMPT = `你在分析一段短视频的关键帧。只描述画面里确实能看到的内容，不要猜测。
@@ -44,10 +44,10 @@ async function callVision(cfg, dataUrls) {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${cfg.llm.apiKey}`,
+      ...authHeaders(cfg.llm.apiKey),
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(Number(cfg.llm.timeoutMs) || 30000),
+    signal: AbortSignal.timeout(Number(cfg.llm.visionTimeoutMs ?? cfg.llm.timeoutMs) || 60000),
   });
   if (!res.ok) throw new Error(`vision HTTP ${res.status}`);
   const json = await res.json();
@@ -137,7 +137,7 @@ async function transcribe(cfg, item) {
     form.append('model', asr.model || 'whisper-1');
     const res = await fetch(`${String(asr.baseUrl || cfg.llm.baseUrl).replace(/\/+$/, '')}/audio/transcriptions`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${asr.apiKey || cfg.llm.apiKey}` },
+      headers: { ...authHeaders(asr.apiKey || cfg.llm.apiKey) },
       body: form,
       signal: AbortSignal.timeout(60000),
     });
@@ -177,6 +177,50 @@ function fixtureSummary(cfg, paths, item) {
 }
 
 /**
+ * mcp 路线的真·看懂视频：douyin_video 取元数据 → douyin_thumb 取封面 → 视觉模型描述画面，
+ * 可选 douyin_watch 拿本地转写口播。任何一步失败都只降级，不编画面内容。
+ */
+async function understandViaMcp(cfg, item) {
+  const { getMcp } = await import('./mcp-client.mjs');
+  const { gatherVideoInput } = await import('./mcp-backend.mjs');
+  let input = null;
+  try {
+    input = await gatherVideoInput(cfg, getMcp(cfg), item);
+  } catch (e) {
+    log('warn', 'mcp 取材失败，本条不使用视频摘要', { error: e.message });
+    return null;
+  }
+  if (!input) return null;
+  const meta = input.meta || {};
+  let visual = null;
+  if (input.frameDataUrls.length && !cfg.llm.mock) {
+    try { visual = await callVision(cfg, input.frameDataUrls); }
+    catch (e) { log('warn', '视觉模型失败，只用元数据', { error: e.message }); }
+  } else if (input.frameDataUrls.length) {
+    log('info', 'llm.mock=true：跳过视觉模型，只用视频元数据');
+  }
+  const title = String(meta.title || '').trim();
+  const summary = (visual?.summary || title)
+    || (input.notes.length ? `（未取得可用信息：${input.notes.join('；')}）` : '');
+  if (!summary) return null;
+  const transcript = String(input.transcript || '').slice(0, 1200);
+  return {
+    videoId: item.videoId || input.awemeId,
+    durationSec: Math.round((Number(meta.durationMs) || 0) / 1000),
+    summary,
+    topics: visual?.topics?.length ? visual.topics : String(title).split(/[ #]/).filter(Boolean).slice(0, 4),
+    ocrText: visual?.ocrText || '',
+    mood: visual?.mood || '',
+    transcript: transcript || undefined,
+    author: meta.author || item.ref?.postTitle || '',
+    framesAnalyzed: input.frameDataUrls.length,
+    confidence: visual ? (visual.confidence || 0.6) : (title ? 0.45 : 0.2),
+    cachedAt: nowIso(),
+    source: 'mcp',
+  };
+}
+
+/**
  * @returns {Promise<object|null>} 结构化摘要；失败/关闭/缓存未命中且不可用 → null
  */
 export async function understand(cfg, paths, cache, item) {
@@ -190,7 +234,9 @@ export async function understand(cfg, paths, cache, item) {
   if (hit) return { ...hit, source: 'cache' };
 
   let summary = null;
-  if (cfg.demo || cfg.video.fixtureOnly || cfg.llm.mock) {
+  if (cfg.douyin.backend === 'mcp' && !cfg.douyin.useFixture) {
+    summary = await understandViaMcp(cfg, item);
+  } else if (cfg.demo || cfg.video.fixtureOnly || cfg.llm.mock) {
     summary = fixtureSummary(cfg, paths, item);
   } else {
     let captured = { frames: [], durationSec: 0 };

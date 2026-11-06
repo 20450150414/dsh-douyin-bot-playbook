@@ -102,8 +102,20 @@ async function readReal(cfg, paths) {
   return out;
 }
 
-/** @returns {Promise<Array>} 已规范化、可能重复（去重由 takeover 主循环做） */
-export async function poll(cfg, paths) {
+/**
+ * @returns {Promise<Array>} 已规范化、可能重复（去重由 takeover 主循环做）
+ * 后端选择：dom（自己解析页面，零外部依赖）/ mcp（走 vendor/douyin-mcp 能力层）
+ */
+export async function poll(cfg, paths, deps = {}) {
+  if (cfg.douyin.backend === 'mcp' && !cfg.douyin.useFixture) {
+    const { getMcp } = await import('./mcp-client.mjs');
+    const { pollItems } = await import('./mcp-backend.mjs');
+    const client = getMcp(cfg);
+    const items = await pollItems(cfg, client, deps.seen);
+    log('info', `[mcp] 本轮取到 ${items.length} 条`);
+    const limit = Number(cfg.douyin.maxItemsPerPoll) || 20;
+    return items.slice(0, limit);
+  }
   const items = cfg.douyin.useFixture ? loadFixture(paths) : await readReal(cfg, paths);
   const limit = Number(cfg.douyin.maxItemsPerPoll) || 20;
   return items.slice(0, limit);

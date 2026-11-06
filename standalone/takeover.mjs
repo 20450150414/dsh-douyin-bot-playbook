@@ -34,6 +34,9 @@ dsh-douyin-takeover —— 默认全关 / dry-run / 人工放行
 
 选项：
   --fixture          离线假消息 + 假模型 + 假视频摘要（不碰浏览器、不联网、不发送）
+  --mcp              用 vendor/douyin-mcp 能力层读真账号（只放开「读」和「理解」，不动发送开关）
+  --login            出抖音登录二维码并轮询登录结果（一次性命令，需先装好能力层）
+  --selfcheck        能力层握手 + 工具清单 + 登录态 + 上游自检（一次性命令）
   --dry              强制 dryRun：不点发送按钮，只写审计
   --once             只跑一轮就退出（适合验活 / 定时任务）
   --pending          列出待审草稿并退出
@@ -60,6 +63,9 @@ function parseCli() {
         dry: { type: 'boolean', default: false },
         once: { type: 'boolean', default: false },
         pending: { type: 'boolean', default: false },
+        mcp: { type: 'boolean', default: false },
+        login: { type: 'boolean', default: false },
+        selfcheck: { type: 'boolean', default: false },
         approve: { type: 'string' },
         reject: { type: 'string' },
         config: { type: 'string' },
@@ -88,6 +94,7 @@ function printHeader(cfg, paths, configSource) {
   log('info', '=== dsh-douyin-takeover 启动 ===', {
     config: truncate(configSource, 90),
     node: process.version,
+    backend: cfg.douyin.useFixture ? 'fixture' : (cfg.douyin.backend || 'dom'),
     fixture: !!cfg.douyin.useFixture,
     llmMock: !!cfg.llm.mock,
     video: !!cfg.video.enabled,
@@ -128,14 +135,15 @@ async function runOnce(cfg, paths, deps) {
   const { audit, approvals, seen, cache } = deps;
   let items = [];
   try {
-    items = await poll(cfg, paths);
+    items = await poll(cfg, paths, deps);
   } catch (e) {
     if (e instanceof StopSignal) throw e;
     log('error', '轮询失败', { error: e.message });
     audit.write('error', { reason: 'poll-failed', error: e.message.slice(0, 200) });
     return;
   }
-  log('info', `本轮读到 ${items.length} 条`, { source: cfg.douyin.useFixture ? 'fixture' : 'dom' });
+  const source = cfg.douyin.useFixture ? 'fixture' : (cfg.douyin.backend === 'mcp' ? 'mcp' : 'dom');
+  log('info', `本轮读到 ${items.length} 条`, { source });
 
   const history = [];
   let fresh = 0;
@@ -181,12 +189,61 @@ async function main() {
     fixture: values.fixture,
     dry: values.dry,
     once: values.once,
+    mcp: values.mcp || values.login || values.selfcheck,
+    loginOnly: values.login || values.selfcheck,
     config: values.config,
   });
   const deps = buildDeps(cfg, paths);
   printHeader(cfg, paths, configSource);
 
   // ---- 一次性命令 ----
+  if (values.selfcheck) {
+    const { getMcp, stopMcp } = await import('./src/mcp-client.mjs');
+    const { selfcheck, checkCredential } = await import('./src/mcp-backend.mjs');
+    try {
+      const tools = await getMcp(cfg).listTools();
+      console.log(`能力层在线，暴露 ${tools.length} 个工具：${tools.map((t) => t.name).sort().join(', ')}`);
+      const cred = await checkCredential(getMcp(cfg));
+      console.log(`登录态：loggedIn=${cred.loggedIn} nickname=${cred.nickname ?? ''} uid=${cred.uid ?? ''}`);
+      const res = await selfcheck(getMcp(cfg));
+      console.log(JSON.stringify(res, null, 2));
+    } catch (e) {
+      console.error(`能力层自检失败：${e.message}`);
+      console.error('先跑：tools/setup-mcp.ps1（装 venv 与依赖），再确认 vendor/douyin-mcp/mcp_server.py 存在');
+      process.exitCode = 1;
+    }
+    stopMcp();
+    return;
+  }
+  if (values.login) {
+    const { getMcp, stopMcp } = await import('./src/mcp-client.mjs');
+    const { loginQr, loginPoll } = await import('./src/mcp-backend.mjs');
+    const client = getMcp(cfg);
+    try {
+      const qr = await loginQr(client);
+      if (!qr.ok) { console.error(`出二维码失败：${qr.error ?? qr.hint ?? 'unknown'}`); process.exitCode = 1; stopMcp(); return; }
+      console.log(`二维码已保存：${qr.png}`);
+      console.log(`${qr.hint ?? '用手机抖音 App 扫这个码'}\n`);
+      const deadline = Date.now() + (Number(cfg.account.loginWaitSec) || 180) * 1000;
+      while (Date.now() < deadline) {
+        await sleep(5000);
+        const st = await loginPoll(client);
+        process.stdout.write(`  轮询中… loggedIn=${st.loggedIn}\n`);
+        if (st.ok && st.loggedIn) {
+          console.log(`\n✓ 登录成功：${st.nickname ?? ''}（uid=${st.uid ?? ''}）`);
+          console.log(`登录态存在 ${cfg.mcp.home}/browser，之后不需要再扫码。`);
+          stopMcp(); return;
+        }
+      }
+      console.error('超时仍未检测到登录态；重新跑 --login 再扫一次。');
+      process.exitCode = 1;
+    } catch (e) {
+      console.error(`登录流程异常：${e.message}`);
+      process.exitCode = 1;
+    }
+    stopMcp();
+    return;
+  }
   if (values.pending) { printPending(deps.approvals, cfg); return; }
   if (values.reject) {
     const r = reject(deps, values.reject);
@@ -197,10 +254,12 @@ async function main() {
     const r = await approve(cfg, paths, deps, values.approve);
     console.log(`${r.ok ? '✓' : '✗'} ${r.message}`);
     await closeBrowser();
+    if (cfg.douyin.backend === 'mcp') { const { stopMcp } = await import('./src/mcp-client.mjs'); stopMcp(); }
     return;
   }
 
   // ---- 主循环 ----
+  const { stopMcp } = await import('./src/mcp-client.mjs');
   const server = startConsole(cfg, deps);
   let stopping = false;
   const shutdown = (sig) => {
@@ -209,6 +268,7 @@ async function main() {
     log('info', `收到 ${sig}，收尾中…`);
     stopConsole(server);
     closeBrowser().catch(() => {});
+    if (cfg.douyin.backend === 'mcp') stopMcp();
   };
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
@@ -233,6 +293,7 @@ async function main() {
 
   stopConsole(server);
   await closeBrowser();
+  stopMcp(); // ★ 能力层子进程不主动收就会一直吊着 event loop，进程永不退出
   log('info', '=== 结束 ===', { counts: deps.audit.countByKind(), pending: deps.approvals.pending().length, log: paths.log });
   console.log(`\n下一步：node takeover.mjs --pending    （看待审草稿）`);
   console.log(`审计：${paths.audit}`);

@@ -15,6 +15,7 @@
     "viewport": { "width": 1366, "height": 900 }
   },
   "douyin": {
+    "backend": "dom",
     "baseUrl": "https://www.douyin.com",
     "commentInboxUrl": "https://creator.douyin.com/creator-micro/content/comment",
     "dmInboxUrl": "https://www.douyin.com/message",
@@ -28,6 +29,28 @@
     "comments": false,
     "directMessages": false,
     "mentions": false
+  },
+  "mcp": {
+    "_note": "backend=mcp 时生效。command/args 留空则自动用 vendor/douyin-mcp/.venv 的 python + mcp_server.py",
+    "command": "",
+    "args": [],
+    "script": "../vendor/douyin-mcp/mcp_server.py",
+    "home": "",
+    "headless": true,
+    "allowWrites": true,
+    "timeoutMs": 240000,
+    "myPostsDays": 1,
+    "maxPostsPerPoll": 5,
+    "commentsPerPost": 20,
+    "inboxLimit": 12,
+    "maxExcludeCids": 300,
+    "useThumbForVision": true,
+    "transcript": false,
+    "transcriptSeconds": 120,
+    "transcriptTimeoutMs": 600000,
+    "mentionOwner": false,
+    "verifyAfterSend": true,
+    "env": {}
   },
   "llm": {
     "baseUrl": "https://api.openai.com/v1",

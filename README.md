@@ -152,6 +152,34 @@ reply.maxRepliesPerHour=3
 
 > 私信和评论是两种语义：评论是公开的、会被别人看到、会影响账号形象；私信是一对一的、更容易踩到隐私。两个开关分开，别一起开。见 [playbook/02-comment-and-dm.md](playbook/02-comment-and-dm.md)。
 
+### 路径 E：真接账号（推荐的正路）
+
+DOM 路线（路径 B）要跟哈希类名硬碰，改版就读到 0 条。真接账号建议切到 `mcp` 能力层——数据从页面自身发出的 XHR 里取，写动作带提交回执：
+
+```powershell
+cd standalone
+powershell -ExecutionPolicy Bypass -File tools\setup-mcp.ps1   # 建 venv + 装 mcp<2 / playwright
+node takeover.mjs --selfcheck                                  # 工具清单 + 登录态 + 上游自检
+node takeover.mjs --login                                      # 出二维码，手机抖音扫一次
+node takeover.mjs --mcp --dry --once                           # 读真评论/真私信 + 真看视频，只出草稿
+```
+
+`--mcp` 只放开「读」和「理解」，**不碰任何发送开关**。发送要三道刹车同时开：
+
+```
+① config.reply.enabled=true 且 dryRun=false
+② 本仓库据此给子进程传 DOUYIN_ALLOW_WRITES=1（mcp.allowWrites=false 可单独掐断）
+③ 上游只在看到该变量时才把 douyin_comment / douyin_chat_send 注册成工具
+```
+
+默认状态下不是「选择不发」，而是那个 Python 进程里**没有发消息这个工具**。改完 `policy` / `actions` 先跑离线回归，别直接碰真账号：
+
+```bash
+node tests/mcp-smoke.mjs      # 23 项断言，零副作用
+```
+
+为什么这样分、踩过什么坑，见 [playbook/07-capability-layer.md](playbook/07-capability-layer.md)。
+
 ### 路径 D：交给 DSH 里的大肥鱼
 
 把仓库地址丢给它（这才是做这套教程的本意）：
@@ -192,7 +220,8 @@ dsh-douyin-bot-playbook/
 │   ├─ 03-video-understanding.md     看懂视频的三条路线与成本
 │   ├─ 04-persona-and-memory.md      人格、口风、去重、跨会话
 │   ├─ 05-safety-and-ratelimit.md    风控、频率闸、人工放行、不可用即停
-│   └─ 06-models-and-cost.md         模型分流、降级、成本、失败语义
+│   ├─ 06-models-and-cost.md         模型分流、降级、成本、失败语义
+│   └─ 07-capability-layer.md        ★ 为什么不自己写抓包，三道刹车怎么叠
 ├─ prompts/
 │   ├─ SYSTEM-PROMPT.md              ★ 通用接管回复系统提示词
 │   ├─ reply-contract.md             输出契约 / 分条 / [SILENT]
@@ -206,13 +235,19 @@ dsh-douyin-bot-playbook/
 │   ├─ douyin-daily-report/SKILL.md
 │   └─ douyin-console-ops/SKILL.md
 ├─ standalone/                       ★ 能跑的独立接管版（不需要 DSH）
-│   ├─ takeover.mjs                  主循环 + CLI
-│   ├─ package.json
-│   ├─ README.md
-│   ├─ src/                          browser / inbox / video / brain / policy /
-│   │                                actions / state / console / selectors / util
+│   ├─ takeover.mjs                  主循环 + CLI（--fixture/--mcp/--login/--selfcheck/--dry/--pending/--approve）
+│   ├─ package.json / README.md
+│   ├─ config.json                   ← 你自己创建（.gitignore 已排除）
+│   ├─ src/                          config util state browser selectors inbox video
+│   │                                brain policy actions console mcp-client mcp-backend
 │   ├─ fixtures/                     离线演示用的假消息与假视频摘要
-│   └─ tools/                        verify / capture-selectors
+│   ├─ tests/                        mock-mcp-server + config + mcp-smoke（23 项断言，零副作用回归）
+│   └─ tools/                        verify / capture-selectors / setup-mcp / start / stop
+├─ vendor/
+│   └─ douyin-mcp/                   ★ 上游能力层（kdcadmin/dsh_douyin_tools，MIT，TiAmoSS）
+│       ├─ mcp_server.py / smoke.py / requirements.txt   原样 vendored，不改行为
+│       ├─ LICENSE.upstream / NOTICE.md                  署名、工具清单、三道刹车
+│       └─ .venv/                                        本地装依赖（.gitignore 排除）
 └─ tools/build-pack.ps1              可选：把 standalone 打成 zip
 ```
 
@@ -228,6 +263,7 @@ dsh-douyin-bot-playbook/
 | **OpenAI 兼容模型** | 各厂商 | 文本决策 + 视觉理解；本仓库只约定 `/chat/completions` 形状 |
 | **dsh-douyin-scroll** | [NEWJO123/dsh-douyin-scroll](https://github.com/NEWJO123/dsh-douyin-scroll) | DSH 里刷抖音出日报的插件（**只做信息源，不负责回复**），本仓库只放链接 |
 | **qq-bridge** | [Derpyu520/qq-bridge](https://github.com/Derpyu520/qq-bridge) | QQ 版 playbook 的桥接层，本仓库的分层思路参考了它 |
+| **dsh_douyin_tools / douyin-mcp** | [kdcadmin/dsh_douyin_tools](https://github.com/kdcadmin/dsh_douyin_tools)（作者 TiAmoSS，MIT） | ★ **抖音能力层**：`vendor/douyin-mcp/mcp_server.py` 原样 vendored。用 Playwright 驱动真实页面、从页面自身 XHR 取数、写动作带提交回执。本仓库在它前面加四道闸 + 审计，**不改它的行为**；署名与边界见 `vendor/douyin-mcp/NOTICE.md` |
 | **dsh-qq-bot-playbook** | [rentaoyan0628-collab/dsh-qq-bot-playbook](https://github.com/rentaoyan0628-collab/dsh-qq-bot-playbook) | 被模仿的对象：三层组织、身份声明、免责写法 |
 
 **DeepSeek Harness** 本体由 DeepSeek 提供，本仓库只写「怎么用它」。抖音 / 抖音创作者中心归字节跳动所有，本仓库与其无隶属关系。
