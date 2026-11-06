@@ -45,6 +45,37 @@ cat state/audit.jsonl                      # macOS/Linux
 
 > 离线演示刻意旁路了「开关 / 渠道 / 白名单」三闸（否则空白名单会把样例全拦掉），日志里会明确打 `[fixture] 离线演示已旁路…`。**黑名单、注入检测、密钥拦截、长度、频率闸、人工放行一个都没旁路**，真机模式一律 fail-closed。
 
+## 一键启动 / 停止（Windows）
+
+`tools/start.ps1` 与 `tools/stop.ps1` 是幂等的常驻启动器：后台隐藏运行、自动找 `node.exe`、写 `state/daemon.pid`、把 stdout/stderr 重定向到 `state/daemon.*.log`，重复执行不会起第二个进程抢端口。
+
+```powershell
+cd standalone
+# 默认：离线演示 + dry-run 常驻（最安全，开箱即跑）
+powershell -ExecutionPolicy Bypass -File tools\start.ps1
+
+# 只跑一轮就退出
+powershell -ExecutionPolicy Bypass -File tools\start.ps1 -Once
+
+# 真机只读（需先 npm install && npx playwright install chromium，并手动扫码登录一次）
+powershell -ExecutionPolicy Bypass -File tools\start.ps1 -Real
+
+# 停止
+powershell -ExecutionPolicy Bypass -File tools\stop.ps1
+```
+
+启动器**永远强制 `--dry`**；要真正发送必须在 `config.json` 里显式开 `reply.enabled` / `dryRun=false` / 白名单 / 人工放行，不能靠启动参数绕过。`start.ps1` 启动后会直接打印只读控制台与待审队列的完整 URL。
+
+非 Windows 用等价命令常驻即可：
+
+```bash
+nohup node takeover.mjs --fixture --dry > state/daemon.out.log 2>&1 &
+echo $! > state/daemon.pid
+kill "$(cat state/daemon.pid)"
+```
+
+> `.ps1` 文件带 UTF-8 BOM，Windows PowerShell 5.1 才能正确读中文输出；用 `pwsh` 7 也没问题。
+
 ## 接真账号（仍然先看不回）
 
 ```bash
@@ -137,7 +168,8 @@ standalone/
 ├─ fixtures/             离线演示假数据
 ├─ tools/
 │   ├─ verify.mjs                 离线自检
-│   └─ capture-selectors.mjs      DOM 快照 + 候选选择器
+│   ├─ capture-selectors.mjs      DOM 快照 + 候选选择器
+│   └─ start.ps1 / stop.ps1       Windows 幂等常驻启动器（写 state/daemon.pid）
 └─ state/                ← 运行时产物，已被 .gitignore 排除
 ```
 

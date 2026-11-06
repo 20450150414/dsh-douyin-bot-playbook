@@ -118,6 +118,15 @@ node takeover.mjs --fixture --dry --once        # 不需要浏览器、不需要
 
 `--fixture` 用 `fixtures/inbox-sample.json` 里的假消息跑完整链路，`--dry` 禁止一切发送。你会看到：轮询 → 视频理解（mock）→ 模型决策（mock）→ 放行判定 → 待审队列 / 审计日志。这一步能验通 80% 的问题。
 
+想让它**常驻在后台跑**（Windows 一键启动器，幂等、永远强制 dry-run）：
+
+```powershell
+cd standalone
+powershell -ExecutionPolicy Bypass -File tools\start.ps1      # 后台隐藏运行 + 只读控制台
+powershell -ExecutionPolicy Bypass -File tools\start.ps1 -Real # 真机只读（需先扫码登录）
+powershell -ExecutionPolicy Bypass -File tools\stop.ps1       # 停止
+```
+
 ### 路径 B：接上真账号，仍然只看不回
 
 1. 填 `config.json`：`douyin.useFixture=false`，浏览器用你自己的持久化 profile，**手动扫码登录一次**。

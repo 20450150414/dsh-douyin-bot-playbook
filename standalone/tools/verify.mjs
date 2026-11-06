@@ -29,9 +29,9 @@ async function playwrightOk() {
   try { await import('playwright'); return true; } catch { return false; }
 }
 
-function ffmpegOk() {
+function ffmpegOk(cmd = 'ffmpeg') {
   return new Promise((resolve) => {
-    const child = spawn('ffmpeg', ['-version'], { stdio: 'ignore' });
+    const child = spawn(cmd, ['-version'], { stdio: 'ignore' });
     child.on('error', () => resolve(false));
     child.on('close', (code) => resolve(code === 0));
   });
@@ -91,9 +91,10 @@ async function main() {
   add((cfg.safety.injectionPatterns || []).length > 0, '注入规则非空', `${(cfg.safety.injectionPatterns || []).length} 条`);
   add((cfg.safety.secretPatterns || []).length > 0, '密钥拦截规则非空', `${(cfg.safety.secretPatterns || []).length} 条`);
 
-  // 可选依赖（软）
+  // 可选依赖（软）：ffmpegPath 可配成绝对路径；默认 page-screenshot 抽帧不需要它
   add(await playwrightOk(), 'playwright 可用（仅真机模式需要）', '缺了不影响 --fixture 演示', true);
-  add(await ffmpegOk(), 'ffmpeg 可用（仅抽帧/ASR 需要）', '缺了不影响文本链路', true);
+  add(await ffmpegOk(cfg.video.ffmpegPath || 'ffmpeg'), 'ffmpeg 可用（仅文件抽帧/ASR 需要）',
+    `检测命令：${cfg.video.ffmpegPath || 'ffmpeg'}；默认 page-screenshot 抽帧不依赖它`, true);
 
   console.log(formatResults());
   const failed = results.filter((r) => !r.ok);
